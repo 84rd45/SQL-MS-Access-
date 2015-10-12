@@ -1,0 +1,187 @@
+SELECT
+X.FieldID,
+X.Field,
+X.WellID,
+X.Well,
+X.StratumID,
+X.Stratum,
+X.VersionID,
+X.VersionDescr,
+X.VersionDate,
+X.BoredStratumID,
+X.X_BoredStratum,
+X.Y_BoredStratum,
+X.OutfallX,
+X.OutfallY,
+X.Roof,
+X.Bottom,
+X.AbsRoof,
+X.AbsBottom,
+X.Zone,
+X.L_н,
+X.L_в,
+X.L_г,
+X.L_нв,
+X.L_нг,
+X.L_вг,
+X.L_нвг,
+X.H_н,
+X.H_в,
+X.H_г,
+X.H_нв,
+X.H_нг,
+X.H_вг,
+X.H_нвг,
+
+Avg(IIF(SDT.Title="Пористость открытая", SD.DataValue, NULL)) As Poro,
+Avg(IIF(SDT.Title="Проницаемость пласта по ГИС", SD.DataValue, NULL)) As Perm,
+Avg(IIF(SDT.Title="Нефтенасыщенность", SD.DataValue, NULL)) As So_Total,
+Avg(IIF(SDT.Title="Нефтенасыщенность" AND ST.Title="н", SD.DataValue, NULL)) As So_н,
+Avg(IIF(SDT.Title="Альфа - ПС", SD.DataValue, NULL)) As AlphaPS,
+Avg(IIF(SDT.Title="Остаточная водонасыщенность по ГИС", SD.DataValue, NULL)) As Swr,
+
+X.CountSeam_н,
+X.CountSeam
+
+FROM
+    (((
+    (
+    SELECT
+    F.ID As FieldID,
+    F.Title As Field,
+    W.ID As WellID,
+    W.Number As Well,
+    S.ID As StratumID,
+    S.Title As Stratum,
+    SV.ID As VersionID,
+    SV.Descr As VersionDescr,
+    SV.Date As VersionDate,
+
+    BS.ID As BoredStratumID,
+    BS.X As X_BoredStratum,
+    BS.Y As Y_BoredStratum,
+
+    W.OutfallX As OutfallX,
+    W.OutfallY As OutfallY,
+
+    BS.Roof As Roof,
+    BS.Bottom As Bottom,
+    BS.AbsRoof As AbsRoof,
+    BS.AbsBottom As AbsBottom,
+
+    IIF(Sum(IIF(ST.Title Like "*н*", 1, 0))>0, "Н") & IIF(Sum(IIF(ST.Title Like "*в*", 1, 0))>0, "В") & IIF(Sum(IIF(ST.Title Like "*г*", 1, 0))>0, "Г") As Zone,
+
+    Sum(IIF(ST.Title="н", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_н,
+    Sum(IIF(ST.Title="в", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_в,
+    Sum(IIF(ST.Title="г", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_г,
+    Sum(IIF(ST.Title="н_в" Or ST.Title="в_н", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_нв,
+    Sum(IIF(ST.Title="н_г", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_нг,
+    Sum(IIF(ST.Title="г_в", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_вг,
+    Sum(IIF(ST.Title="г_в_н", Abs(BSeam.Bottom-BSeam.Roof), 0)) As L_нвг,
+
+    Sum(IIF(ST.Title="н", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_н,
+    Sum(IIF(ST.Title="в", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_в,
+    Sum(IIF(ST.Title="г", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_г,
+    Sum(IIF(ST.Title="н_в" Or ST.Title="в_н", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_нв,
+    Sum(IIF(ST.Title="н_г", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_нг,
+    Sum(IIF(ST.Title="г_в", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_вг,
+    Sum(IIF(ST.Title="г_в_н", Abs(BSeam.AbsBottom-BSeam.AbsRoof), 0)) As H_нвг,
+
+    Sum(IIF(ST.Title Like "*н*", 1, 0)) As CountSeam_н,
+    Count(ST.Title) As CountSeam
+
+    FROM
+    (((((dbo_Well As W INNER JOIN dbo_BoredStratum As BS ON BS.WellID=W.ID)
+    INNER JOIN dbo_Stratum As S ON BS.StratumID=S.ID)
+    INNER JOIN dbo_BoredSeam As BSeam ON BS.ID=BSeam.BoredStratumID)
+    INNER JOIN dbo_SaturantType As ST ON BSeam.SaturantID=ST.ID)
+    INNER JOIN dbo_Field As F ON W.FieldID=F.ID)
+    INNER JOIN dbo_StratumVersion As SV ON BS.VersionID=SV.ID
+
+    WHERE
+    (ST.Title="н"
+    OR ST.Title="н_в"
+    OR ST.Title="г"
+    OR ST.Title="н_г"
+    OR ST.Title="в_н"
+    OR ST.Title="г_в_н"
+    OR ST.Title="г_в"
+    OR ST.Title="в")
+
+    GROUP BY
+    F.ID,
+    F.Title,
+    W.ID,
+    W.Number,
+    S.ID,
+    S.Title,
+    SV.ID,
+    SV.Descr,
+    SV.Date,
+    BS.ID,
+    BS.X,
+    BS.Y,
+    W.OutfallX,
+    W.OutfallY,
+    BS.Roof,
+    BS.Bottom,
+    BS.AbsRoof,
+    BS.AbsBottom
+    ) As X
+INNER JOIN dbo_BoredSeam As BSeam ON X.BoredStratumID=BSeam.BoredStratumID)
+INNER JOIN dbo_SeamData As SD ON BSeam.ID=SD.SeamID)
+INNER JOIN dbo_SeamDataType As SDT ON SD.DataTypeID=SDT.ID)
+INNER JOIN dbo_SaturantType As ST ON BSeam.SaturantID=ST.ID
+
+WHERE
+(ST.Title="н"
+OR ST.Title="н_в"
+OR ST.Title="г"
+OR ST.Title="н_г"
+OR ST.Title="в_н"
+OR ST.Title="г_в_н"
+OR ST.Title="г_в")
+
+GROUP BY
+X.FieldID,
+X.Field,
+X.WellID,
+X.Well,
+X.StratumID,
+X.Stratum,
+X.VersionID,
+X.VersionDescr,
+X.VersionDate,
+X.BoredStratumID,
+X.X_BoredStratum,
+X.Y_BoredStratum,
+X.OutfallX,
+X.OutfallY,
+X.Roof,
+X.Bottom,
+X.AbsRoof,
+X.AbsBottom,
+X.Zone,
+X.L_н,
+X.L_в,
+X.L_г,
+X.L_нв,
+X.L_нг,
+X.L_вг,
+X.L_нвг,
+X.H_н,
+X.H_в,
+X.H_г,
+X.H_нв,
+X.H_нг,
+X.H_вг,
+X.H_нвг,
+X.CountSeam_н,
+X.CountSeam
+
+ORDER BY
+X.Field,
+X.Well,
+X.Stratum,
+X.VersionDate
+;
